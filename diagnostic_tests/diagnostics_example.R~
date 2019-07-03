@@ -1,0 +1,172 @@
+#This script gives an example of why you need to use a diagnostic like the Stein discrepancy rather than traditional MCMC diagnostics when tuning the step size of the SGLD algorithm
+#                                        
+# For simplicity let's use the same example as given in the "Gaussin example"
+#
+# \pi(\theta) ~ N(0,P^T*D*P), where P is a 2x2 rotation matrix and D is a diagonal matrix                                                                               
+#########################################################################################
+#Function to calculate the kernel Stein discrepancy
+
+# Uses the Inverse MultiQuadratic Kernel Stein Discrepancy (IMQ KSD)
+# IMQ(x,y) = (c^2 + (x-y)^T(x-y))^-beta (for c in \R, beta in (0,1))
+# x (matrix): num_points by d
+# gradlogp (matrix): num_points by d
+# c (double): parameter of IMQ
+# beta (double): parameter of IMQ
+
+imqKSD = function(x,gradlogp,c=1,beta=0.5){
+  c2 = c^2
+  num_points = nrow(x)
+  dim_x = ncol(x)
+  imq_ksd_sum = 0
+  
+  #Calculate KSD
+  for(i in 1:num_points){
+    for(j in i:num_points){
+      x1 = x[i,]
+      x2 = x[j,]
+      gradlogp1 = gradlogp[i,]
+      gradlogp2 = gradlogp[j,]
+      
+      diff = x1-x2
+      diff2 = sum(diff^2)
+      
+      base = diff2 + c2
+      base_beta = base^(-beta)
+      base_beta1 = base_beta/base
+      
+      kterm_sum = sum(gradlogp1*gradlogp2)*base_beta
+      coeffgrad = -2.0 * beta * base_beta1
+      gradx1term_sum = sum(gradlogp1*(-diff))*coeffgrad
+      gradx2term_sum = sum(gradlogp2*diff)*coeffgrad
+      gradx1x2term_sum = (-dim_x + 2*(beta+1)*diff2/base)*coeffgrad
+      m <- 1 + 1*(i!=j) # Making up for the fact that we're only doing the second loop over i:num_points
+      imq_ksd_sum = imq_ksd_sum + m*(kterm_sum + gradx1term_sum + gradx2term_sum + gradx1x2term_sum)
+    }
+  }
+  imq_ksd = sqrt(imq_ksd_sum)/num_points
+  return(imq_ksd)
+}
+
+#################################################################################
+# Set-up
+library(coda)
+
+d = 2               #dimension
+P = matrix(c(cos(pi/4),sin(pi/4),-sin(pi/4),cos(pi/4)),2,2)
+D = diag(c(2,1),d)
+Sigma = t(P)%*%D%*%P
+hs = c(10^(-4),10^(-3),10^(-2),10^(-1),10^0)            #range of stepsizesw
+nu = 0.1           #standard deviation on noisy gradient
+
+#SGLD sampler
+reps = 10
+iter = 10000
+ess = matrix(NA,ncol=reps,nrow=length(hs)) # effecive sample size
+ksd = matrix(NA,ncol=reps,nrow=length(hs)) # kernel Stein discrepancy
+params = array(NA,dim=c(reps,iter,d))
+matInv = -t(P)%*%solve(D)%*%P
+for(k in 1:length(hs)){
+    h = hs[k]
+    for(j in 1:reps){
+        theta = matrix(NA,nrow=iter,ncol=d)
+        grads = matrix(NA,nrow=iter,ncol=d)
+        theta[1,] = c(0,0)
+        grads[1,] = matInv%*%theta[1,] + rnorm(2,0,nu)
+        for(i in 2:iter){
+            grads[i,] = matInv%*%theta[i-1,] + rnorm(2,0,nu)
+            theta[i,] = theta[i-1,] + h/2*grads[i,] + sqrt(h)*rnorm(2,0,1)
+        }
+        params[k,,] = theta
+        ess[k,j] = min(effectiveSize(theta))
+        ksd[k,j] = log10(imqKSD(theta,grads,c=1,beta=0.5))
+    }
+}
+
+#Plot posterior samples
+library(ggplot2)
+library(MASS)
+library(gridExtra)
+posterior = mvrnorm(100000,c(0,0),t(P)%*%solve(D)%*%P)
+posterior=data.frame("Component 1"=posterior[,1],"Component 2"=posterior[,2])
+
+p1 <- ggplot(posterior, aes(Component.1,Component.2)) +
+    geom_density_2d() + labs(x=bquote(theta[1]),y=bquote(theta[2]))+
+    geom_point(data=data.frame(x=params[1,seq(1,10000,10),1],y=params[1,seq(1,10000,10),2]),aes(x=x,y=y))
+
+
+p2 <- ggplot(posterior, aes(Component.1,Component.2)) +
+    geom_density_2d() + labs(x=bquote(theta[1]),y=bquote(theta[2]))+ ggtitle(bquote('h ='~10^-3)) + theme(plot.title = element_text(hjust = 0.5)) +
+    geom_point(data=data.frame(x=params[2,seq(1,10000,10),1],y=params[2,seq(1,10000,10),2]),aes(x=x,y=y))
+p3 <- ggplot(posterior, aes(Component.1,Component.2)) +
+    geom_density_2d() + labs(x=bquote(theta[1]),y=bquote(theta[2]))+ ggtitle(bquote('h ='~10^-2)) + theme(plot.title = element_text(hjust = 0.5)) + 
+    geom_point(data=data.frame(x=params[3,seq(1,10000,10),1],y=params[3,seq(1,10000,10),2]),aes(x=x,y=y))
+p4 <- ggplot(posterior, aes(Component.1,Component.2)) +
+    geom_density_2d() + labs(x=bquote(theta[1]),y=bquote(theta[2]))+ ggtitle(bquote('h ='~10^-1)) + theme(plot.title = element_text(hjust = 0.5)) +
+    geom_point(data=data.frame(x=params[4,seq(1,10000,10),1],y=params[4,seq(1,10000,10),2]),aes(x=x,y=y))
+p5 <- ggplot(posterior, aes(Component.1,Component.2)) +
+    geom_density_2d() + labs(x=bquote(theta[1]),y=bquote(theta[2]))+ ggtitle(bquote('h ='~10^-0)) + theme(plot.title = element_text(hjust = 0.5)) +
+    geom_point(data=data.frame(x=params[5,seq(1,10000,10),1],y=params[5,seq(1,10000,10),2]),aes(x=x,y=y))
+
+p6 <- ggplot(data=data.frame(h=c(1,2,3,4),KSD=rowMeans(ksd[-1,])),aes(x=h,y=KSD)) +
+                                        #  scale_x_discrete(limits=c("10e-3","10e-2","10e-1","10e0")) +
+#    scale_x_discrete(limits=c(expression(paste("10"^"-3")),expression(paste("10"^"-2")),expression(paste("10"^"-1")),expression(paste("10"^"-0")))) +
+     #     scale_x_discrete(limits=parse(text=expression(paste("10"^"-3")),expression(paste("10"^"-2")),expression(paste("10"^"-1")),expression(paste("10"^"-0")))) +
+       geom_line()+
+       geom_point()
+
+p7 <- ggplot(data=data.frame(h=c(1,2,3,4),ESS=rowMeans(ess[-1,])),aes(x=h,y=ESS)) +
+       scale_x_discrete(limits=c("10e-3","10e-2","10e-1","10e0")) +
+       geom_line()+
+       geom_point()
+
+## lay <- rbind(c(1,2,3),
+##              c(1,2,3),
+##              c(4,5,5),
+##              c(4,6,6))
+
+lay <- rbind(c(1,2,3,4),
+             c(1,2,3,4),
+             c(5,5,6,6))
+
+#pdf("ksd.pdf", onefile = TRUE)             
+grid.arrange(p2,p3,p4,p5,p6,p7, layout_matrix = lay)
+#dev.off()
+
+## ess
+##            [,1]       [,2]       [,3]       [,4]       [,5]       [,6]
+## [1,]   3.216606   2.412565   2.757377   4.922400   3.369630   2.429549
+## [2,]   2.021234   2.125040   4.473427   3.346993   2.132326   3.873331
+## [3,]  12.726471  13.886509   6.163765  11.532187  16.349592  11.442098
+## [4,]  61.333684  65.256269  66.627827  45.640305  54.982212  52.321685
+## [5,] 429.611829 542.878725 422.190520 446.059380 511.708501 502.949589
+##            [,7]       [,8]       [,9]      [,10]
+## [1,]   2.405202   2.359336   4.359702   3.604818
+## [2,]   6.627800   3.670261   6.189188   4.978518
+## [3,]   5.884656   6.396685   5.878117   8.011938
+## [4,]  46.663859  42.030202  61.418622  48.618405
+## [5,] 485.078133 475.601962 482.051624 498.796823
+
+
+## ksd
+##             [,1]         [,2]        [,3]       [,4]        [,5]        [,6]
+## [1,]  0.03972055 -0.005402036  0.14258596  0.1583886  0.04632489 -0.04783261
+## [2,] -0.18736862 -0.213123286 -0.08698494 -0.2195658 -0.21587742 -0.20657677
+## [3,] -0.64049888 -0.690096660 -0.62492107 -0.6969440 -0.43708087 -0.68759116
+## [4,] -1.12174809 -1.192431261 -1.26898420 -1.2752011 -1.05955209 -1.17190217
+## [5,] -0.82343137 -0.768497709 -0.81354569 -0.8469718 -0.78999451 -0.79568053
+##            [,7]        [,8]        [,9]       [,10]
+## [1,]  0.1306660 -0.02601353  0.03428678  0.01327519
+## [2,] -0.3037322 -0.25932935 -0.24783240 -0.22625808
+## [3,] -0.4306388 -0.56847469 -0.64947820 -0.63861291
+## [4,] -1.1297169 -1.20693112 -1.18332716 -1.10596303
+## [5,] -0.7784800 -0.80924746 -0.81403584 -0.81994960
+
+
+## rowMeans(ksd)
+## [1]  0.04859998 -0.21666488 -0.60643373 -1.17157571 -0.80598345
+##  rowMeans(ess)
+## [1]   3.183718   3.943812   9.827202  54.489307 479.692709
+
+
+
+
