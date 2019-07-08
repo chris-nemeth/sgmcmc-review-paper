@@ -85,9 +85,9 @@ lay <- rbind(c(1,2,3,4),
              c(1,2,3,4),
              c(5,5,6,6))
 
-#pdf("ksd.pdf", onefile = TRUE)             
+pdf("ksd.pdf", onefile = TRUE)             
 grid.arrange(p2,p3,p4,p5,p6,p7, layout_matrix = lay)
-#dev.off()
+dev.off()
 
 
 
