@@ -8,12 +8,12 @@
 source("ksd.R")
 library(coda)
 
-d = 2               #dimension
+d = 2                                                       #dimension
 P = matrix(c(cos(pi/4),sin(pi/4),-sin(pi/4),cos(pi/4)),2,2) # rotation matrix
-D = diag(c(2,1),d)                                          # diagonal matrix
+D = diag(c(3,1),d)                                          # diagonal matrix
 Sigma = t(P)%*%D%*%P
 hs = c(10^(-4),10^(-3),10^(-2),10^(-1),10^0)            #range of stepsizes
-nu = 0.1           #standard deviation on noisy gradient
+nu = 0.1                                                #standard deviation on noisy gradient
 
 #SGLD sampler
 reps = 10
@@ -39,7 +39,9 @@ for(k in 1:length(hs)){
     }
 }
 
-#Plot posterior samples
+#-------------------------------------------------------------
+#Plot posterior samples along with KSD and ESS
+     
 library(ggplot2)
 library(MASS)
 library(gridExtra)
@@ -49,7 +51,6 @@ posterior=data.frame("Component 1"=posterior[,1],"Component 2"=posterior[,2])
 p1 <- ggplot(posterior, aes(Component.1,Component.2)) +
     geom_density_2d() + labs(x=bquote(theta[1]),y=bquote(theta[2]))+
     geom_point(data=data.frame(x=params[1,seq(1,10000,10),1],y=params[1,seq(1,10000,10),2]),aes(x=x,y=y))
-
 
 p2 <- ggplot(posterior, aes(Component.1,Component.2)) +
     geom_density_2d() + labs(x=bquote(theta[1]),y=bquote(theta[2]))+ ggtitle(bquote('h ='~10^-3)) + theme(plot.title = element_text(hjust = 0.5)) +
@@ -65,9 +66,6 @@ p5 <- ggplot(posterior, aes(Component.1,Component.2)) +
     geom_point(data=data.frame(x=params[5,seq(1,10000,10),1],y=params[5,seq(1,10000,10),2]),aes(x=x,y=y))
 
 p6 <- ggplot(data=data.frame(h=c(1,2,3,4),KSD=rowMeans(ksd[-1,])),aes(x=h,y=KSD)) +
-                                        #  scale_x_discrete(limits=c("10e-3","10e-2","10e-1","10e0")) +
-#    scale_x_discrete(limits=c(expression(paste("10"^"-3")),expression(paste("10"^"-2")),expression(paste("10"^"-1")),expression(paste("10"^"-0")))) +
-     #     scale_x_discrete(limits=parse(text=expression(paste("10"^"-3")),expression(paste("10"^"-2")),expression(paste("10"^"-1")),expression(paste("10"^"-0")))) +
        geom_line()+
        geom_point()
 
@@ -76,18 +74,11 @@ p7 <- ggplot(data=data.frame(h=c(1,2,3,4),ESS=rowMeans(ess[-1,])),aes(x=h,y=ESS)
        geom_line()+
        geom_point()
 
-## lay <- rbind(c(1,2,3),
-##              c(1,2,3),
-##              c(4,5,5),
-##              c(4,6,6))
-
 lay <- rbind(c(1,2,3,4),
              c(1,2,3,4),
              c(5,5,6,6))
 
-pdf("ksd.pdf", onefile = TRUE)             
 grid.arrange(p2,p3,p4,p5,p6,p7, layout_matrix = lay)
-dev.off()
 
 
 
