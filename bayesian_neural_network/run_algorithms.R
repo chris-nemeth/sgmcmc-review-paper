@@ -7,7 +7,6 @@ source("bnn_setup.R")
 #============================================================
 # Get the dataset, seed and dimension info
 
-h = 1e-4
 iterations = 10^5
 minibatchSize = 0.01
 
@@ -23,6 +22,8 @@ feedDict[[testPlaceholder[["y"]]]] = testset[["y"]]
 
 #---------------------------------------------------------------
 #SGLD
+h = 1e-4 #select a step size (KSD is recommended to tune the step size)
+
 sgld = sgldSetup(logLik, dataset, params, h, logPrior = logPrior, minibatchSize)
 # Get number of observations in test set
 Ntest = as.double(nrow(testset[["X"]]))
@@ -153,4 +154,11 @@ for (i in 1:iterations){
 }
 
 #----------------------------------------------------------------
+#Plots
 
+plot(sgld_logloss,type='l',ylim=c(0,1))
+points(sgldcv_logloss,type='l',col='red')
+points(sghmc_logloss,type='l',col='blue')
+points(sghmccv_logloss,type='l',col='green')
+points(sgnht_logloss,type='l',col='orange')
+points(sgnhtcv_logloss,type='l',col='purple')

@@ -1,10 +1,10 @@
 library("sgmcmc")
 
 # Generate dataset for STAN
-genDataset = function(inputs) {
+genDataset = function() {
     # Generate dataset and set hyperparameters
-    train = inputs$train
-    test = inputs$test
+    train <- read.table(paste0("data/train.dat"))
+    test <- read.table(paste0("data/test.dat"))
     out = list()
     out$uid = train[,1]
     out$iid = train[,2]
@@ -26,17 +26,26 @@ genDataset = function(inputs) {
 }
 
 # Generate dataset for SGMCMC
-genSGDataset = function(inputs) {
-    dataset = genDataset(inputs)
+genSGDataset = function() {
+    dataset = genDataset()
     # Delete unrequired items
     dataset = list("user" = dataset$uid, "item" = dataset$iid, "rating" = dataset$R)
     return(dataset)
 }
 
+# Generate the dataset f
+genTestDataset = function() {
+    dataset = genDataset()
+    test <- read.table(paste0("data/test.dat"))
+    # Delete unrequired items
+    dataset = list("user" = test[,1], "item" = test[,2], "rating" = test[,3])
+    return(dataset)
+}
+
 
 # Generate initial parameters for SGMCMC
-initParams = function(inputs) {
-    hyperParams = genDataset(inputs)
+initParams = function() {
+    hyperParams = genDataset()
     # Initialize hyperparameters: mu and Lambda
     params = list("mu_U" = rnorm(hyperParams$D), "mu_V" = rnorm(hyperParams$D), 
                   "Lambda_U" = rnorm(hyperParams$D, -.1, .1), 
@@ -47,43 +56,5 @@ initParams = function(inputs) {
     return(params)
 }
 
-
-# Download movielens dataset for bpmf example
-# Dataset already broken into 5 seeds for cross validation, so break up accordingly
-bpmfDownload = function(error = NULL) {
-    writeLines("First time run. Downloading MovieLens dataset...")
-    download.file("http://files.grouplens.org/datasets/movielens/ml-100k.zip", "tmp.zip")
-    unzip("tmp.zip")
-    # Remove last column and resave for each seed
-    for (seed in 1:5) {
-        dir.create(paste0(seed , "/"), showWarnings = FALSE)
-        train = read.table(paste0("ml-100k/u", seed, ".base"))
-        write.table(train[,1:3], paste0(seed, "/train.dat"), row.names = FALSE, col.names = FALSE)
-        test = read.table(paste0("ml-100k/u", seed, ".test"))
-        write.table(test[,1:3], paste0(seed, "/test.dat"), row.names = FALSE, col.names = FALSE)
-    }
-    unlink("ml-100k", recursive = TRUE)
-    unlink("tmp.zip", recursive = TRUE)
-}
-
-# Load required data based on array ID
-lookup = function(seed) {
-    # Check seed is given
-    if (length(seed) == 0) {
-        stop("Please provide command line argument for seed")
-    }
-    out = list("seed" = seed)
-    datasets = bpmf(out$seed)
-    out = c(out, datasets)
-    set.seed(out$seed)
-    return(out)
-}
-
-# Try to open relevant bpmf data. If it fails then download it.
-bpmf = function(seed) {
-    train <- read.table(paste0("data/", seed, "/train.dat"))
-    test <- read.table(paste0("data/", seed, "/test.dat"))
-    return(list("train" = train, "test" = test))
-}
 
 
