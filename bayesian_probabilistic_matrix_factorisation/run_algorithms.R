@@ -6,11 +6,11 @@ source("bpmf_setup.R")
 
 #============================================================
 # Get the dataset and set-up some test functions
+set.seed(13579)
 
-seed = sample(1:5,1)            # The data comes pre-split into 5 training and test sets
-inputs = lookup(seed)
-params = initParams(inputs)     # Initial parameters for SGMCMC
-dataset = genSGDataset(inputs)  # Load the data
+dataset = genSGDataset()    # Load the trainin data
+testData = genTestDataset() # Load the test data
+params = initParams()       # Initial parameters for SGMCMC
 
 #Centre the data
 meanRating = mean(dataset$rating)
@@ -25,7 +25,7 @@ predict = function(currentState,testset,meanRating){
 }
 
 #Set-up test data set
-testset = list("user" = inputs$test[,1], "item" = inputs$test[,2], "rating" = inputs$test[,3])
+testset = list("user" = testData$user, "item" = testData$item, "rating" = testData$rating)
 testPlaceholder = list()
 testPlaceholder[["user"]] = tf$placeholder(tf$float32, length(testset[["user"]]))
 testPlaceholder[["item"]] = tf$placeholder(tf$float32, length(testset[["item"]]))
@@ -51,7 +51,7 @@ h = 4e-5
 sgld = sgldSetup(logLik, dataset, params, h, logPrior, minibatchSize)
 
 sess = initSess(sgld)  #Initialise the Tensorflow session
-sgld_rmse = rep(0, length(iter))
+sgld_rmse = rep(0, iter)
 
 for (i in 1:iter) {
     sgmcmcStep(sgld, sess)
@@ -71,7 +71,7 @@ hOpt = 4e-5
 sgldcv = sgldcvSetup(logLik, dataset, params, h, hOpt, logPrior, minibatchSize, nItersOpt=optIter)
 
 sess = initSess(sgldcv)  #Initialise the Tensorflow session
-sgldcv_rmse = rep(0, length(iter))
+sgldcv_rmse = rep(0, iter)
 
 for (i in 1:iter) {
     sgmcmcStep(sgldcv, sess)
@@ -90,7 +90,7 @@ h = 4e-7
 sghmc = sghmcSetup(logLik, dataset, params, h, logPrior, minibatchSize)
 
 sess = initSess(sghmc)  #Initialise the Tensorflow session
-sghmc_rmse = rep(0, length(iter))
+sghmc_rmse = rep(0, iter)
 
 for (i in 1:iter) {
     sgmcmcStep(sghmc, sess)
@@ -110,7 +110,7 @@ hOpt = 4e-5
 sghmccv = sghmccvSetup(logLik, dataset, params, h, hOpt, logPrior, minibatchSize, nItersOpt=optIter)
 
 sess = initSess(sghmccv)  #Initialise the Tensorflow session
-sghmccv_rmse = rep(0, length(iter))
+sghmccv_rmse = rep(0, iter)
 
 for (i in 1:iter) {
     sgmcmcStep(sghmccv, sess)
@@ -123,3 +123,9 @@ for (i in 1:iter) {
 }
 
 #------------------------------------------------------------------------
+#Plot the rmse
+
+plot(test$sgld_rmse,type='l',ylim=c(0.8,max(sgld_rmse)))
+points(sgldcv_rmse,type='l',col='red')
+points(sghmc_rmse,type='l',col='blue')
+points(sghmccv_rmse,type='l',col='green')
