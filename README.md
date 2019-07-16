@@ -1,5 +1,7 @@
 # This repository contains the R code from the paper *Stochastic gradient Markov chain Monte*
 
+Running the code in this repository requires the `sgmcmc` [R package](https://arxiv.org/pdf/1710.00578.pdf).
+
 Each of the models from the paper can be found in one of the following folders:
 * Diagnostic tests (Section 4) - Code to compute the kernel Stein discrepancy.
 * Logistic regression (Section 6.1) - Code to compare the *sgmcmc* algorithms on a logistic regression model using simulated data.
